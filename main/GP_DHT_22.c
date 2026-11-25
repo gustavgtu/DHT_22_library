@@ -10,13 +10,12 @@
 #define LOW 0
 
 void app_main(void){
-
-    gpio_set_direction(DHT_DATA_PIN, OUTPUT_ONLY);
+        //output low for atleast 1ms is the start signal for dht22
+    gpio_set_direction(DHT_DATA_PIN, GPIO_MODE_OUTPUT);
     gpio_set_level(DHT_DATA_PIN, LOW);
-    esp_rom_delay(1200);
-    gpio_set_direction(DHT_DATA_PIN, INPUT_ONLY);
-    gpio_set_pull_mode(DHT_DATA_PIN, GPIO_PULLUP_ONLY)
+    esp_rom_delay_us(1200);
+        //swith to input pullup mode
+    gpio_set_direction(DHT_DATA_PIN, GPIO_MODE_INPUT);
+    gpio_set_pull_mode(DHT_DATA_PIN, GPIO_PULLUP_ONLY);
 
-
-    
 }
