@@ -10,10 +10,13 @@
 #define LOW 0
 #define HIGH 1
 #define DHT_TIMEOUT_US 200
+#define TIMEOUT -1
+
+int wait_for_level(int level);
 
 void app_main(void){
     vTaskDelay(pdMS_TO_TICKS(2000));
-    int64_t transmission_end[80], transmission_start[80], low_time, high_time, timeout_timer;
+    int64_t transmission_end, transmission_start, low_time, high_time, transmission_time[80];
     uint8_t data[5] = {0, 0, 0, 0, 0};
     uint16_t raw_humidity, raw_temperature;
 
@@ -32,34 +35,38 @@ void app_main(void){
     gpio_set_direction(DHT_DATA_PIN, GPIO_MODE_INPUT);
     gpio_set_pull_mode(DHT_DATA_PIN, GPIO_PULLUP_ONLY);
 
-    timeout_timer=esp_timer_get_time();
-    while(gpio_get_level(DHT_DATA_PIN) == LOW){
-        if( esp_timer_get_time() - timeout_timer > DHT_TIMEOUT_US ){
-            printf("Data reading error");
-        }
+    if(wait_for_level(LOW) == TIMEOUT){
+        printf("timeout error");
     }
-    while(gpio_get_level(DHT_DATA_PIN) == HIGH);
+    if(wait_for_level(HIGH) == TIMEOUT){
+        printf("timeout error");
+    }
 
     for(int i=0; i<80; i=i+2){
 
-    transmission_start[i] = esp_timer_get_time();
-    while(gpio_get_level(DHT_DATA_PIN) == LOW);
-    transmission_end[i] = esp_timer_get_time();
+    transmission_start = esp_timer_get_time();
+    if(wait_for_level(LOW) == TIMEOUT){
+        printf("timeout error");
+    }
+    transmission_end = esp_timer_get_time();
+    transmission_time[i] = transmission_end - transmission_start;
 
-
-    transmission_start[i+1] = esp_timer_get_time();
-    while(gpio_get_level(DHT_DATA_PIN) == HIGH);
-    transmission_end[i+1] = esp_timer_get_time();
+    transmission_start = esp_timer_get_time();
+    if(wait_for_level(HIGH) == TIMEOUT){
+        printf("timeout error");
+    }
+    transmission_end = esp_timer_get_time();
+    transmission_time[i+1] = transmission_end - transmission_start;
 
     }
     
     for(int i=0; i<80; ++i){
-        printf("%s: %" PRId64 "\n", i%2==0 ? "LOW" : "HIGH",  transmission_end[i] - transmission_start[i]);
+        printf("%s: %" PRId64 "\n", i%2==0 ? "LOW" : "HIGH",  transmission_time[i]);
     }
 
     for(int i=0; i<40; ++i){
-        low_time = transmission_end[2*i] - transmission_start [2*i];
-        high_time = transmission_end[2*i+1] - transmission_start[2*i+1];
+        low_time = transmission_time[2*i];
+        high_time = transmission_time[2*i+1];
 
         data[i/8] <<= 1;
 
@@ -95,8 +102,9 @@ void app_main(void){
     printf("raw temperature: %d\n", raw_temperature);
     printf("Temperature: %.2f\n", temperature);
     
+    uint8_t checksum = data[0]+data[1]+data[2]+data[3];
     //checksum
-    if((int8_t)data[0]+data[1]+data[2]+data[3] == data[4]){
+    if(checksum == data[4]){
         printf("Checksum passed\n");
     }
     else{
@@ -104,8 +112,18 @@ void app_main(void){
     }
 
 
-    printf("data1234: %d\n", (int8_t)data[0]+data[1]+data[2]+data[3]);
+    printf("data1234: %d\n", checksum);
     printf("data4: %d", data[4]);
     
 
+}
+
+int wait_for_level(int level){
+    int64_t timeout_timer=esp_timer_get_time();
+    while(gpio_get_level(DHT_DATA_PIN) == level){
+        if( esp_timer_get_time() - timeout_timer > DHT_TIMEOUT_US ){
+            return TIMEOUT;
+        }
+    }
+    return 0;
 }
